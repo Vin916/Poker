@@ -188,7 +188,115 @@ header h1 {
     padding: 12px;
     backdrop-filter: blur(5px);
     z-index: 150;
-    width: 140px;
+    width: 180px;
+}
+
+/* Permanent Betting Panel */
+.permanent-betting-panel {
+    position: fixed !important;
+    left: 15px !important;
+    top: 350px !important;
+    background: rgba(0, 0, 0, 0.9) !important;
+    border: 2px solid rgba(255, 255, 255, 0.4) !important;
+    border-radius: 10px !important;
+    padding: 15px !important;
+    backdrop-filter: blur(5px) !important;
+    z-index: 9999 !important;
+    width: 180px !important;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5) !important;
+    transition: all 0.3s ease !important;
+}
+
+.permanent-betting-panel.disabled {
+    opacity: 0.4 !important;
+    filter: grayscale(100%) !important;
+    pointer-events: none !important;
+}
+
+.permanent-betting-panel.enabled {
+    opacity: 1 !important;
+    filter: none !important;
+    pointer-events: all !important;
+    border-color: #FFD700 !important;
+    box-shadow: 0 5px 20px rgba(255, 215, 0, 0.3) !important;
+}
+
+.permanent-betting-panel h3 {
+    color: #FFD700;
+    margin-bottom: 10px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.permanent-betting-panel .bet-amount-container {
+    margin-bottom: 10px;
+}
+
+.permanent-betting-panel .bet-amount-container label {
+    color: white;
+    font-size: 0.8rem;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.permanent-betting-panel .bet-amount-container input[type="range"] {
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+.permanent-betting-panel .bet-amount-container input[type="number"] {
+    width: 100%;
+    padding: 5px;
+    border: none;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    font-size: 0.8rem;
+}
+
+.permanent-action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.permanent-action-btn {
+    padding: 10px 15px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 0.9rem !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    text-transform: uppercase !important;
+    width: 100% !important;
+    min-height: 35px !important;
+}
+
+.permanent-action-btn.fold-btn {
+    background: linear-gradient(145deg, #e74c3c, #c0392b) !important;
+    color: white !important;
+}
+
+.permanent-action-btn.call-btn {
+    background: linear-gradient(145deg, #3498db, #2980b9) !important;
+    color: white !important;
+}
+
+.permanent-action-btn.raise-btn {
+    background: linear-gradient(145deg, #e67e22, #d35400) !important;
+    color: white !important;
+}
+
+.permanent-action-btn:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+}
+
+.permanent-action-btn:disabled {
+    opacity: 0.3 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
 }
 
 .auto-actions h3 {
@@ -432,21 +540,23 @@ header h1 {
 
 /* Betting Controls */
 .betting-controls {
-    position: fixed;
-    left: 15px;
-    top: 300px;
-    background: rgba(0, 0, 0, 0.9);
-    padding: 15px;
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
-    backdrop-filter: blur(5px);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    z-index: 150;
-    width: 160px;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    position: fixed !important;
+    left: 15px !important;
+    top: 300px !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    padding: 15px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: center !important;
+    backdrop-filter: blur(5px) !important;
+    border: 3px solid #FFD700 !important;
+    z-index: 9999 !important;
+    width: 180px !important;
+    box-shadow: 0 5px 20px rgba(255, 215, 0, 0.5) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .timer-display {
@@ -528,15 +638,18 @@ header h1 {
 }
 
 .action-btn {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-transform: uppercase;
-    width: 100%;
+    padding: 10px 15px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 0.9rem !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+    text-transform: uppercase !important;
+    width: 100% !important;
+    min-height: 40px !important;
+    display: block !important;
+    visibility: visible !important;
 }
 
 .action-btn:hover {

@@ -47,6 +47,21 @@
             </div>
         </div>
 
+        <!-- Permanent Betting Panel -->
+        <div class="permanent-betting-panel" id="permanent-betting-panel" style="display: none;">
+            <h3>Your Actions</h3>
+            <div class="bet-amount-container">
+                <label for="permanent-bet-input">Bet Amount:</label>
+                <input type="range" id="permanent-bet-slider" min="0" max="1000" value="20">
+                <input type="number" id="permanent-bet-input" min="0" max="1000" value="20">
+            </div>
+            <div class="permanent-action-buttons">
+                <button id="permanent-fold-btn" class="permanent-action-btn fold-btn">Fold</button>
+                <button id="permanent-call-btn" class="permanent-action-btn call-btn">Call</button>
+                <button id="permanent-raise-btn" class="permanent-action-btn raise-btn">Raise</button>
+            </div>
+        </div>
+
         <!-- Game Table -->
         <div id="game-table" class="poker-table" style="display: none;">
             <!-- Timer Display - Prominent Position -->

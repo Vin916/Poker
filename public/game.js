@@ -37,6 +37,14 @@ class PokerClient {
         
         // Player stack display
         this.playerStackDisplay = document.getElementById('player-stack');
+        
+        // Permanent betting panel elements
+        this.permanentBettingPanel = document.getElementById('permanent-betting-panel');
+        this.permanentFoldBtn = document.getElementById('permanent-fold-btn');
+        this.permanentCallBtn = document.getElementById('permanent-call-btn');
+        this.permanentRaiseBtn = document.getElementById('permanent-raise-btn');
+        this.permanentBetSlider = document.getElementById('permanent-bet-slider');
+        this.permanentBetInput = document.getElementById('permanent-bet-input');
 
         // Betting Controls
         this.foldBtn = document.getElementById('fold-btn');
@@ -65,20 +73,38 @@ class PokerClient {
             if (e.key === 'Enter') this.joinGame();
         });
 
-        // Betting Controls
-        this.foldBtn.addEventListener('click', () => this.playerAction('fold'));
-        this.checkCallBtn.addEventListener('click', () => this.playerAction('call'));
-        this.raiseBtn.addEventListener('click', () => {
+        // Betting Controls (old)
+        if (this.foldBtn) this.foldBtn.addEventListener('click', () => this.playerAction('fold'));
+        if (this.checkCallBtn) this.checkCallBtn.addEventListener('click', () => this.playerAction('call'));
+        if (this.raiseBtn) this.raiseBtn.addEventListener('click', () => {
             const amount = parseInt(this.betInput.value);
             this.playerAction('raise', amount);
         });
 
-        // Bet slider and input sync
-        this.betSlider.addEventListener('input', () => {
+        // Bet slider and input sync (old)
+        if (this.betSlider) this.betSlider.addEventListener('input', () => {
             this.betInput.value = this.betSlider.value;
         });
-        this.betInput.addEventListener('input', () => {
+        if (this.betInput) this.betInput.addEventListener('input', () => {
             this.betSlider.value = this.betInput.value;
+        });
+
+        // Permanent betting panel controls
+        this.permanentFoldBtn.addEventListener('click', () => this.playerAction('fold'));
+        this.permanentCallBtn.addEventListener('click', () => this.playerAction('call'));
+        this.permanentRaiseBtn.addEventListener('click', () => {
+            const amount = parseInt(this.permanentBetInput.value);
+            this.playerAction('raise', amount);
+        });
+
+        // Permanent bet slider and input sync
+        this.permanentBetSlider.addEventListener('input', () => {
+            this.permanentBetInput.value = this.permanentBetSlider.value;
+            this.permanentRaiseBtn.textContent = `Raise $${this.permanentBetInput.value}`;
+        });
+        this.permanentBetInput.addEventListener('input', () => {
+            this.permanentBetSlider.value = this.permanentBetInput.value;
+            this.permanentRaiseBtn.textContent = `Raise $${this.permanentBetInput.value}`;
         });
 
         // Auto actions - make mutually exclusive
@@ -120,6 +146,8 @@ class PokerClient {
             console.log('Received game state:', state);
             this.gameState = state;
             this.updateGameDisplay();
+            // Force betting controls to be visible
+            this.forceBettingControlsVisible();
         });
 
         this.socket.on('handComplete', (results) => {
@@ -133,6 +161,8 @@ class PokerClient {
         this.socket.on('timerStarted', (data) => {
             console.log('Timer started event received:', data);
             this.startTimer(data.timeLimit);
+            // Activate permanent betting panel when timer starts (it's our turn)
+            this.activatePermanentBettingPanel();
             // Force betting controls to show when timer starts
             this.showBettingControls();
             // Check for auto actions
@@ -142,6 +172,8 @@ class PokerClient {
         this.socket.on('timeoutWarning', (message) => {
             this.showMessage(message, 'error');
             this.clearTimer();
+            // Deactivate betting panel when turn ends
+            this.deactivatePermanentBettingPanel();
         });
 
         this.socket.on('gamePaused', (isPaused) => {
@@ -172,17 +204,19 @@ class PokerClient {
         this.loginModal.style.display = 'none';
         this.gameTable.style.display = 'block';
         this.autoActions.style.display = 'block';
-        this.bettingControls.style.display = 'flex'; // Always show betting controls
-        this.bettingControls.style.visibility = 'visible';
+        this.permanentBettingPanel.style.display = 'block'; // Show permanent betting panel
+        this.permanentBettingPanel.classList.add('disabled'); // Start disabled
         this.pauseBtn.style.display = 'block'; // Show pause button
         this.playerNameDisplay.textContent = name;
         
-        console.log('Game joined, betting controls should be visible');
+        console.log('Game joined, permanent betting panel should be visible');
     }
 
     playerAction(type, amount = 0) {
+        console.log(`🎮 Player action: ${type}${amount ? ` $${amount}` : ''}`);
         this.socket.emit('playerAction', { type, amount });
-        // Don't hide betting controls - they'll be disabled instead
+        // Deactivate betting panel after action
+        this.deactivatePermanentBettingPanel();
         this.clearTimer();
     }
 
@@ -341,7 +375,7 @@ class PokerClient {
         const isPlayerTurn = humanPlayer && 
             this.gameState.currentPlayerIndex === this.gameState.players.indexOf(humanPlayer);
         
-        console.log('Betting controls check:', {
+        console.log('Permanent betting panel check:', {
             hasHumanPlayer: !!humanPlayer,
             isPlayerTurn: isPlayerTurn,
             hasFolded: humanPlayer?.hasFolded,
@@ -351,38 +385,27 @@ class PokerClient {
             gamePhase: this.gameState.gamePhase
         });
         
-        // Always show betting controls if there's a human player who hasn't folded or gone all-in
+        // Always show permanent betting panel if there's a human player who hasn't folded or gone all-in
         if (humanPlayer && !humanPlayer.hasFolded && !humanPlayer.isAllIn) {
-            console.log('Showing betting controls for player');
-            this.bettingControls.style.display = 'block';
-            this.bettingControls.style.visibility = 'visible';
-            
-            // Enable/disable based on whether it's player's turn
-            const buttons = this.bettingControls.querySelectorAll('button, input');
-            buttons.forEach(button => {
-                button.disabled = !isPlayerTurn;
-                if (!isPlayerTurn) {
-                    button.style.opacity = '0.5';
-                    button.style.cursor = 'not-allowed';
-                } else {
-                    button.style.opacity = '1';
-                    button.style.cursor = 'pointer';
-                }
-            });
+            this.permanentBettingPanel.style.display = 'block';
             
             if (isPlayerTurn) {
-                this.updateBettingOptions(humanPlayer);
-                // Force show betting controls when it's player's turn
-                this.bettingControls.style.display = 'flex';
-                this.bettingControls.style.visibility = 'visible';
+                console.log('Enabling permanent betting panel - player turn');
+                this.permanentBettingPanel.classList.remove('disabled');
+                this.permanentBettingPanel.classList.add('enabled');
+                this.updatePermanentBettingOptions(humanPlayer);
+            } else {
+                console.log('Disabling permanent betting panel - not player turn');
+                this.permanentBettingPanel.classList.remove('enabled');
+                this.permanentBettingPanel.classList.add('disabled');
             }
         } else {
-            console.log('Hiding betting controls:', {
+            console.log('Hiding permanent betting panel:', {
                 reason: !humanPlayer ? 'no human player' :
                        humanPlayer?.hasFolded ? 'player folded' : 
                        humanPlayer?.isAllIn ? 'player all in' : 'unknown'
             });
-            this.bettingControls.style.display = 'none';
+            this.permanentBettingPanel.style.display = 'none';
         }
         
         if (!isPlayerTurn) {
@@ -410,34 +433,87 @@ class PokerClient {
             playerCurrentBet: player.currentBet
         });
 
+        if (this.betSlider && this.betInput && this.checkCallBtn && this.raiseBtn) {
+            // Update slider and input ranges
+            this.betSlider.max = maxBet;
+            this.betInput.max = maxBet;
+            this.betSlider.min = minRaise;
+            this.betInput.min = minRaise;
+            
+            if (parseInt(this.betInput.value) < minRaise) {
+                this.betInput.value = minRaise;
+                this.betSlider.value = minRaise;
+            }
+
+            // Update button text
+            this.checkCallBtn.textContent = canCheck ? 'Check' : `Call $${callAmount}`;
+            this.raiseBtn.textContent = `Raise $${this.betInput.value}`;
+
+            // Enable/disable buttons
+            this.checkCallBtn.disabled = false;
+            this.raiseBtn.disabled = maxBet < minRaise;
+            
+            if (callAmount >= player.stack) {
+                this.checkCallBtn.textContent = 'All In';
+            }
+
+            console.log('Betting buttons updated:', {
+                checkCallText: this.checkCallBtn.textContent,
+                raiseText: this.raiseBtn.textContent,
+                checkCallDisabled: this.checkCallBtn.disabled,
+                raiseDisabled: this.raiseBtn.disabled
+            });
+        }
+    }
+
+    updatePermanentBettingOptions(player) {
+        if (!player || !this.gameState) {
+            console.log('Cannot update permanent betting options - missing player or game state');
+            return;
+        }
+
+        const callAmount = this.gameState.currentBet - player.currentBet;
+        const canCheck = callAmount === 0;
+        const maxBet = player.stack;
+        const minRaise = Math.max(this.gameState.bigBlind, callAmount + this.gameState.bigBlind);
+
+        console.log('Updating permanent betting options:', {
+            callAmount,
+            canCheck,
+            maxBet,
+            minRaise,
+            currentBet: this.gameState.currentBet,
+            playerCurrentBet: player.currentBet
+        });
+
         // Update slider and input ranges
-        this.betSlider.max = maxBet;
-        this.betInput.max = maxBet;
-        this.betSlider.min = minRaise;
-        this.betInput.min = minRaise;
+        this.permanentBetSlider.max = maxBet;
+        this.permanentBetInput.max = maxBet;
+        this.permanentBetSlider.min = minRaise;
+        this.permanentBetInput.min = minRaise;
         
-        if (parseInt(this.betInput.value) < minRaise) {
-            this.betInput.value = minRaise;
-            this.betSlider.value = minRaise;
+        if (parseInt(this.permanentBetInput.value) < minRaise) {
+            this.permanentBetInput.value = minRaise;
+            this.permanentBetSlider.value = minRaise;
         }
 
         // Update button text
-        this.checkCallBtn.textContent = canCheck ? 'Check' : `Call $${callAmount}`;
-        this.raiseBtn.textContent = `Raise $${this.betInput.value}`;
+        this.permanentCallBtn.textContent = canCheck ? 'Check' : `Call $${callAmount}`;
+        this.permanentRaiseBtn.textContent = `Raise $${this.permanentBetInput.value}`;
 
         // Enable/disable buttons
-        this.checkCallBtn.disabled = false;
-        this.raiseBtn.disabled = maxBet < minRaise;
+        this.permanentCallBtn.disabled = false;
+        this.permanentRaiseBtn.disabled = maxBet < minRaise;
         
         if (callAmount >= player.stack) {
-            this.checkCallBtn.textContent = 'All In';
+            this.permanentCallBtn.textContent = 'All In';
         }
 
-        console.log('Betting buttons updated:', {
-            checkCallText: this.checkCallBtn.textContent,
-            raiseText: this.raiseBtn.textContent,
-            checkCallDisabled: this.checkCallBtn.disabled,
-            raiseDisabled: this.raiseBtn.disabled
+        console.log('Permanent betting buttons updated:', {
+            callText: this.permanentCallBtn.textContent,
+            raiseText: this.permanentRaiseBtn.textContent,
+            callDisabled: this.permanentCallBtn.disabled,
+            raiseDisabled: this.permanentRaiseBtn.disabled
         });
     }
 
@@ -819,6 +895,74 @@ class PokerClient {
             this.pauseBtn.classList.remove('paused');
             this.gamePausedOverlay.style.display = 'none';
         }
+    }
+
+    forceBettingControlsVisible() {
+        if (!this.gameState) return;
+        
+        const humanPlayer = this.gameState.players.find(p => !p.isBot);
+        if (humanPlayer && !humanPlayer.hasFolded && !humanPlayer.isAllIn) {
+            console.log('Forcing betting controls to be visible');
+            this.bettingControls.style.display = 'flex';
+            this.bettingControls.style.visibility = 'visible';
+            this.bettingControls.style.opacity = '1';
+            this.bettingControls.style.position = 'fixed';
+            this.bettingControls.style.left = '15px';
+            this.bettingControls.style.top = '300px';
+            this.bettingControls.style.zIndex = '9999';
+            
+            // Make sure all buttons are visible
+            const buttons = this.bettingControls.querySelectorAll('button');
+            buttons.forEach(button => {
+                button.style.display = 'block';
+                button.style.visibility = 'visible';
+            });
+        }
+    }
+
+    activatePermanentBettingPanel() {
+        if (!this.gameState) return;
+        
+        const humanPlayer = this.gameState.players.find(p => !p.isBot);
+        if (humanPlayer && !humanPlayer.hasFolded && !humanPlayer.isAllIn) {
+            console.log('🎯 ACTIVATING permanent betting panel - timer started, it\'s our turn!');
+            
+            // Make sure panel is visible
+            this.permanentBettingPanel.style.display = 'block';
+            
+            // Remove disabled class and add enabled class
+            this.permanentBettingPanel.classList.remove('disabled');
+            this.permanentBettingPanel.classList.add('enabled');
+            
+            // Update betting options for the player
+            this.updatePermanentBettingOptions(humanPlayer);
+            
+            // Force the styling to ensure it lights up
+            this.permanentBettingPanel.style.borderColor = '#FFD700';
+            this.permanentBettingPanel.style.boxShadow = '0 5px 20px rgba(255, 215, 0, 0.5)';
+            this.permanentBettingPanel.style.opacity = '1';
+            this.permanentBettingPanel.style.filter = 'none';
+            this.permanentBettingPanel.style.pointerEvents = 'all';
+            
+            console.log('✅ Permanent betting panel should now be ACTIVE and GOLDEN!');
+        }
+    }
+
+    deactivatePermanentBettingPanel() {
+        console.log('🔒 DEACTIVATING permanent betting panel - turn ended');
+        
+        // Add disabled class and remove enabled class
+        this.permanentBettingPanel.classList.remove('enabled');
+        this.permanentBettingPanel.classList.add('disabled');
+        
+        // Force the styling to ensure it grays out
+        this.permanentBettingPanel.style.opacity = '0.4';
+        this.permanentBettingPanel.style.filter = 'grayscale(100%)';
+        this.permanentBettingPanel.style.pointerEvents = 'none';
+        this.permanentBettingPanel.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+        this.permanentBettingPanel.style.boxShadow = '0 5px 20px rgba(0, 0, 0, 0.5)';
+        
+        console.log('🔒 Permanent betting panel is now DISABLED and GRAYED OUT');
     }
 }
 
