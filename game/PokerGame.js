@@ -24,7 +24,7 @@ class PokerGame {
     this.playersActedThisRound = new Set();
     this.lastPlayerToRaise = -1;
     this.playerTimer = null;
-    this.timeLimit = 10000; // 10 seconds in milliseconds
+    this.timeLimit = 10000; // 10 seconds in milliseconds - ENFORCED
     this.isPaused = false;
     
     this.initializeBots();
@@ -199,10 +199,15 @@ class PokerGame {
     // Mark this player as having acted
     this.playersActedThisRound.add(playerIndex);
 
+    // Prepare action display info
+    let actionDisplay = '';
+    let actionAmount = 0;
+
     switch (type) {
       case 'fold':
         player.hasFolded = true;
         this.playersInHand = this.playersInHand.filter(p => p.id !== player.id);
+        actionDisplay = 'FOLD';
         break;
 
       case 'call':
@@ -210,11 +215,20 @@ class PokerGame {
         player.stack -= callAmount;
         player.currentBet += callAmount;
         this.pot += callAmount;
-        if (player.stack === 0) player.isAllIn = true;
+        actionAmount = callAmount;
+        if (player.stack === 0) {
+          player.isAllIn = true;
+          actionDisplay = 'ALL IN';
+        } else if (callAmount === 0) {
+          actionDisplay = 'CHECK';
+        } else {
+          actionDisplay = 'CALL';
+        }
         break;
 
       case 'check':
         // No money changes hands
+        actionDisplay = 'CHECK';
         break;
 
       case 'raise':
@@ -226,12 +240,26 @@ class PokerGame {
         this.currentBet = player.currentBet;
         this.lastRaiseAmount = amount;
         this.lastPlayerToRaise = playerIndex;
+        actionAmount = raiseAmount;
         // Reset acted players when there's a raise (everyone needs to act again)
         this.playersActedThisRound.clear();
         this.playersActedThisRound.add(playerIndex);
-        if (player.stack === 0) player.isAllIn = true;
+        if (player.stack === 0) {
+          player.isAllIn = true;
+          actionDisplay = 'ALL IN';
+        } else {
+          actionDisplay = 'RAISE';
+        }
         break;
     }
+
+    // Broadcast the action to all players
+    this.io.emit('playerAction', {
+      playerName: player.name,
+      action: actionDisplay,
+      amount: actionAmount,
+      isBot: player.isBot
+    });
 
     this.broadcastGameState();
     this.moveToNextPlayer();
@@ -408,7 +436,11 @@ class PokerGame {
       const playerHands = remainingPlayers.map(player => {
         const handResult = HandEvaluator.evaluateHand(player.holeCards, this.communityCards);
         return {
-          player,
+          player: {
+            name: player.name,
+            stack: player.stack,
+            holeCards: player.holeCards // Include hole cards for showdown
+          },
           hand: handResult
         };
       });
@@ -503,13 +535,15 @@ class PokerGame {
     // Clear any existing timer
     this.clearPlayerTimer();
 
+    console.log(`⏰ Starting 10-second timer for ${player.name}`);
+
     // Start new timer for this player
     this.playerTimer = setTimeout(() => {
       if (this.isPaused) return; // Don't timeout if paused
       
-      console.log(`Player ${player.name} timed out, forcing fold`);
+      console.log(`⏱️ TIMEOUT: ${player.name} exceeded 10-second limit, forcing fold`);
       if (player.socket) {
-        player.socket.emit('timeoutWarning', 'Time expired - automatically folding');
+        player.socket.emit('timeoutWarning', 'Time expired (10s) - automatically folding');
       }
       
       // Force fold action
@@ -519,6 +553,7 @@ class PokerGame {
     // Notify player about the timer
     if (player.socket) {
       player.socket.emit('timerStarted', { timeLimit: this.timeLimit });
+      console.log(`📤 Sent 10-second timer notification to ${player.name}`);
     }
   }
 
@@ -546,7 +581,8 @@ class PokerGame {
       serializedHands = allHands.map(playerHand => ({
         player: {
           name: playerHand.player.name,
-          stack: playerHand.player.stack
+          stack: playerHand.player.stack,
+          holeCards: playerHand.player.holeCards ? [...playerHand.player.holeCards] : []
         },
         hand: {
           name: playerHand.hand.name,
@@ -564,6 +600,7 @@ class PokerGame {
       allHands: serializedHands
     };
     
+    console.log('📤 Broadcasting winner data with hands:', JSON.stringify(winnerData, null, 2));
     this.io.emit('handComplete', winnerData);
   }
 

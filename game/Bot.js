@@ -45,7 +45,29 @@ class Bot {
     const shouldBluff = randomFactor < this.personalityTraits.bluffFrequency;
     const isAggressive = randomFactor < this.personalityTraits.aggression;
 
-    // Decision logic based on hand strength and game state
+    // IMPORTANT: Never fold when you can check for free!
+    if (currentBet === 0) {
+      // No bet to call - we can check for free
+      if (handStrength >= 0.8 || shouldBluff) {
+        // Strong hand or bluffing - be aggressive
+        if (isAggressive && this.stack > minimumRaise * 2) {
+          return {
+            action: 'raise',
+            amount: Math.min(
+              Math.floor(potSize * (0.5 + Math.random() * 0.5)),
+              this.stack
+            )
+          };
+        } else {
+          return { action: 'check' };
+        }
+      } else {
+        // Any hand - just check since it's free
+        return { action: 'check' };
+      }
+    }
+
+    // There is a bet to call - normal decision logic
     if (handStrength >= 0.8 || shouldBluff) {
       // Strong hand or bluffing - be aggressive
       if (isAggressive && this.stack > minimumRaise * 2) {
@@ -61,25 +83,21 @@ class Bot {
       }
     } else if (handStrength >= 0.5) {
       // Decent hand
-      if (potOdds > 0.3 || currentBet === 0) {
+      if (potOdds > 0.3) {
         return { action: 'call' };
       } else {
         return { action: 'fold' };
       }
     } else if (handStrength >= this.personalityTraits.callThreshold) {
       // Marginal hand
-      if (currentBet === 0 || potOdds > 0.5) {
+      if (potOdds > 0.5) {
         return { action: 'call' };
       } else {
         return { action: 'fold' };
       }
     } else {
-      // Weak hand
-      if (currentBet === 0 && Math.random() < 0.3) {
-        return { action: 'check' };
-      } else {
-        return { action: 'fold' };
-      }
+      // Weak hand - fold when there's a bet
+      return { action: 'fold' };
     }
   }
 

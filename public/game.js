@@ -5,6 +5,7 @@ class PokerClient {
         this.playerName = '';
         this.timerInterval = null;
         this.isPaused = false;
+        this.lastGamePhase = null; // Track phase changes for animation
 
         // UI Elements
         this.loginModal = document.getElementById('login-modal');
@@ -151,7 +152,7 @@ class PokerClient {
         });
 
         this.socket.on('handComplete', (results) => {
-            this.showHandResults(results);
+            this.showHandResultsOnTable(results);
         });
 
         this.socket.on('error', (message) => {
@@ -188,6 +189,10 @@ class PokerClient {
                 this.pauseBtn.classList.remove('paused');
                 this.gamePausedOverlay.style.display = 'none';
             }
+        });
+
+        this.socket.on('playerAction', (actionData) => {
+            this.showPlayerAction(actionData);
         });
     }
 
@@ -234,6 +239,16 @@ class PokerClient {
             }))
         });
 
+        // Check if this is a new hand (phase changed from showdown/waiting to preflop)
+        const isNewHand = (this.lastGamePhase === 'showdown' || this.lastGamePhase === 'waiting' || this.lastGamePhase === null) 
+                         && this.gameState.gamePhase === 'preflop';
+        
+        console.log('🎲 Game phase transition:', {
+            lastPhase: this.lastGamePhase,
+            currentPhase: this.gameState.gamePhase,
+            isNewHand: isNewHand
+        });
+
         // Update pot
         this.potDisplay.textContent = `$${this.gameState.pot}`;
         this.potAmountDisplay.textContent = `Pot: $${this.gameState.pot}`;
@@ -247,14 +262,17 @@ class PokerClient {
         // Update players
         this.updatePlayers();
 
-        // Update player's hand and info
-        this.updatePlayerInfo();
+        // Update player's hand and info (pass new hand flag)
+        this.updatePlayerInfo(isNewHand);
 
         // Update betting controls
         this.updateBettingControls();
 
         // Update hand strength display
         this.updateHandStrength();
+
+        // Remember current phase for next update
+        this.lastGamePhase = this.gameState.gamePhase;
     }
 
     getPhaseText() {
@@ -270,14 +288,30 @@ class PokerClient {
     }
 
     updateCommunityCards() {
-        this.communityCards.innerHTML = '';
+        const currentCardCount = this.communityCards.children.length;
+        const newCardCount = this.gameState.communityCards.length;
         
+        // Only add new cards that weren't there before
+        if (newCardCount > currentCardCount) {
+            // Add only the new cards with animation
+            for (let i = currentCardCount; i < newCardCount; i++) {
+                const card = this.gameState.communityCards[i];
+                const cardElement = this.createCardElement(card);
+                cardElement.classList.add('card-dealing');
+                cardElement.style.animationDelay = `${(i - currentCardCount) * 0.2}s`;
+                this.communityCards.appendChild(cardElement);
+            }
+        } else if (newCardCount < currentCardCount) {
+            // New hand started - clear all cards and add with animation
+            this.communityCards.innerHTML = '';
         this.gameState.communityCards.forEach((card, index) => {
             const cardElement = this.createCardElement(card);
             cardElement.classList.add('card-dealing');
             cardElement.style.animationDelay = `${index * 0.2}s`;
             this.communityCards.appendChild(cardElement);
         });
+        }
+        // If same count, do nothing (no new cards to add)
     }
 
     updatePlayers() {
@@ -314,25 +348,73 @@ class PokerClient {
         return playerDiv;
     }
 
-    updatePlayerInfo() {
+    updatePlayerInfo(isNewHand = false) {
         const humanPlayer = this.gameState.players.find(p => !p.isBot);
         if (humanPlayer) {
+            if (this.playerStackDisplay) {
             this.playerStackDisplay.textContent = `$${humanPlayer.stack}`;
-            this.updatePlayerHand(humanPlayer.holeCards);
+            }
+            this.updatePlayerHand(humanPlayer.holeCards, isNewHand);
         }
     }
 
-    updatePlayerHand(cards) {
-        this.playerHand.innerHTML = '';
+    updatePlayerHand(cards, isNewHand = false) {
+        const currentCardCount = this.playerHand.children.length;
+        const newCardCount = cards ? cards.length : 0;
         
-        if (cards && cards.length > 0) {
+        console.log('🃏 Updating player hand:', {
+            currentCardCount,
+            newCardCount,
+            isNewHand,
+            cards: cards ? cards.map(c => `${c.rank}${c.suit}`) : []
+        });
+        
+        // Always update if it's a new hand or if we have cards to show
+        if (newCardCount > 0 && (isNewHand || currentCardCount === 0 || this.shouldForceCardUpdate(cards))) {
+            console.log('🔄 Refreshing player cards');
+            this.playerHand.innerHTML = '';
             cards.forEach((card, index) => {
                 const cardElement = this.createCardElement(card);
+                // Only add animation for new hands
+                if (isNewHand) {
                 cardElement.style.animationDelay = `${index * 0.1}s`;
                 cardElement.classList.add('card-dealing');
+                }
                 this.playerHand.appendChild(cardElement);
             });
+        } else if (newCardCount === 0) {
+            // Clear cards if no cards to show
+            this.playerHand.innerHTML = '';
         }
+    }
+    
+    shouldForceCardUpdate(newCards) {
+        // Check if the cards have actually changed
+        const currentCards = Array.from(this.playerHand.children);
+        if (currentCards.length !== newCards.length) {
+            return true;
+        }
+        
+        // Compare each card
+        for (let i = 0; i < newCards.length; i++) {
+            const currentRank = currentCards[i].querySelector('.card-rank')?.textContent;
+            const currentSuit = currentCards[i].querySelector('.card-suit')?.textContent;
+            const newCard = newCards[i];
+            
+            const suitSymbols = {
+                'hearts': '♥',
+                'diamonds': '♦',
+                'clubs': '♣',
+                'spades': '♠'
+            };
+            
+            if (currentRank !== newCard.rank || currentSuit !== suitSymbols[newCard.suit]) {
+                console.log('🔄 Cards changed, forcing update');
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     createCardElement(card) {
@@ -394,7 +476,7 @@ class PokerClient {
                 this.permanentBettingPanel.classList.remove('disabled');
                 this.permanentBettingPanel.classList.add('enabled');
                 this.updatePermanentBettingOptions(humanPlayer);
-            } else {
+                } else {
                 console.log('Disabling permanent betting panel - not player turn');
                 this.permanentBettingPanel.classList.remove('enabled');
                 this.permanentBettingPanel.classList.add('disabled');
@@ -434,35 +516,35 @@ class PokerClient {
         });
 
         if (this.betSlider && this.betInput && this.checkCallBtn && this.raiseBtn) {
-            // Update slider and input ranges
-            this.betSlider.max = maxBet;
-            this.betInput.max = maxBet;
-            this.betSlider.min = minRaise;
-            this.betInput.min = minRaise;
-            
-            if (parseInt(this.betInput.value) < minRaise) {
-                this.betInput.value = minRaise;
-                this.betSlider.value = minRaise;
-            }
+        // Update slider and input ranges
+        this.betSlider.max = maxBet;
+        this.betInput.max = maxBet;
+        this.betSlider.min = minRaise;
+        this.betInput.min = minRaise;
+        
+        if (parseInt(this.betInput.value) < minRaise) {
+            this.betInput.value = minRaise;
+            this.betSlider.value = minRaise;
+        }
 
-            // Update button text
-            this.checkCallBtn.textContent = canCheck ? 'Check' : `Call $${callAmount}`;
-            this.raiseBtn.textContent = `Raise $${this.betInput.value}`;
+        // Update button text
+        this.checkCallBtn.textContent = canCheck ? 'Check' : `Call $${callAmount}`;
+        this.raiseBtn.textContent = `Raise $${this.betInput.value}`;
 
-            // Enable/disable buttons
-            this.checkCallBtn.disabled = false;
-            this.raiseBtn.disabled = maxBet < minRaise;
-            
-            if (callAmount >= player.stack) {
-                this.checkCallBtn.textContent = 'All In';
-            }
+        // Enable/disable buttons
+        this.checkCallBtn.disabled = false;
+        this.raiseBtn.disabled = maxBet < minRaise;
+        
+        if (callAmount >= player.stack) {
+            this.checkCallBtn.textContent = 'All In';
+        }
 
-            console.log('Betting buttons updated:', {
-                checkCallText: this.checkCallBtn.textContent,
-                raiseText: this.raiseBtn.textContent,
-                checkCallDisabled: this.checkCallBtn.disabled,
-                raiseDisabled: this.raiseBtn.disabled
-            });
+        console.log('Betting buttons updated:', {
+            checkCallText: this.checkCallBtn.textContent,
+            raiseText: this.raiseBtn.textContent,
+            checkCallDisabled: this.checkCallBtn.disabled,
+            raiseDisabled: this.raiseBtn.disabled
+        });
         }
     }
 
@@ -517,32 +599,149 @@ class PokerClient {
         });
     }
 
-    showHandResults(results) {
-        let resultsHTML = '';
+    showHandResultsOnTable(results) {
+        console.log('🏆 Showdown results:', results);
         
-        results.winners.forEach(winner => {
-            resultsHTML += `
-                <div class="hand-result winner">
-                    <strong>${winner.name}</strong> wins $${winner.winnings}!
-                </div>
-            `;
-        });
-
-        if (results.allHands) {
-            resultsHTML += '<hr><h3>All Hands:</h3>';
-            results.allHands.forEach(playerHand => {
-                const isWinner = results.winners.some(w => w.name === playerHand.player.name);
-                resultsHTML += `
-                    <div class="hand-result ${isWinner ? 'winner' : ''}">
-                        <strong>${playerHand.player.name}:</strong> ${playerHand.hand.name}
-                        ${this.formatCards(playerHand.hand.cards)}
-                    </div>
-                `;
-            });
+        // Show winner message prominently
+        let winnerMessage = '';
+        if (results.winners.length === 1) {
+            winnerMessage = `🏆 ${results.winners[0].name} wins $${results.pot}!`;
+        } else {
+            const winnerNames = results.winners.map(w => w.name).join(', ');
+            winnerMessage = `🏆 Split pot: ${winnerNames} each win $${results.winners[0].winnings}!`;
         }
+        
+        this.showMessage(winnerMessage, 'winner');
+        
+        // Show all player hands face-up by updating the game display
+        // This will be handled by updating the players display to show their cards
+        if (results.allHands) {
+            this.showAllPlayerHands(results.allHands, results.winners);
+        }
+        
+        // Auto-continue after 8 seconds
+        setTimeout(() => {
+            this.hideAllPlayerHands();
+        }, 8000);
+    }
 
-        this.handResults.innerHTML = resultsHTML;
-        this.handResultModal.style.display = 'flex';
+    showAllPlayerHands(allHands, winners) {
+        console.log('👀 Showing all player hands for showdown');
+        console.log('📋 All hands data:', allHands);
+        console.log('🏆 Winners:', winners);
+        
+        if (!allHands || allHands.length === 0) {
+            console.log('❌ No hands data to display');
+            return;
+        }
+        
+        // Create a map of player names to their hands
+        const handMap = {};
+        allHands.forEach(playerHand => {
+            console.log(`🎴 Processing ${playerHand.player.name}:`, {
+                cards: playerHand.player.holeCards,
+                handName: playerHand.hand.name
+            });
+            
+            handMap[playerHand.player.name] = {
+                cards: playerHand.player.holeCards || [],
+                handName: playerHand.hand.name,
+                isWinner: winners.some(w => w.name === playerHand.player.name)
+            };
+        });
+        
+        console.log('🗺️ Hand map created:', handMap);
+        
+        // Update each player seat to show their cards
+        const playerSeats = this.playersContainer.querySelectorAll('.player-seat');
+        console.log(`🪑 Found ${playerSeats.length} player seats`);
+        
+        playerSeats.forEach((seat, index) => {
+            const playerNameElement = seat.querySelector('.player-name');
+            if (!playerNameElement) {
+                console.log(`❌ No player name found in seat ${index}`);
+                return;
+            }
+            
+            const playerName = playerNameElement.textContent;
+            const handInfo = handMap[playerName];
+            
+            console.log(`🎯 Processing seat for ${playerName}:`, handInfo);
+            
+            if (handInfo && handInfo.cards.length > 0) {
+                // Remove existing cards if any
+                const existingCards = seat.querySelectorAll('.showdown-card');
+                existingCards.forEach(card => card.remove());
+                
+                const existingContainer = seat.querySelector('.showdown-cards');
+                if (existingContainer) {
+                    existingContainer.remove();
+                }
+                
+                // Add cards to player seat
+                const cardsContainer = document.createElement('div');
+                cardsContainer.className = 'showdown-cards';
+                
+                handInfo.cards.forEach(card => {
+                    console.log(`🃏 Adding card for ${playerName}:`, card);
+                    const cardElement = this.createSmallCardElement(card);
+                    cardElement.classList.add('showdown-card');
+                    cardsContainer.appendChild(cardElement);
+                });
+                
+                // Add hand name
+                const handNameElement = document.createElement('div');
+                handNameElement.className = 'hand-name';
+                handNameElement.textContent = handInfo.handName;
+                cardsContainer.appendChild(handNameElement);
+                
+                seat.appendChild(cardsContainer);
+                
+                // Highlight winner
+                if (handInfo.isWinner) {
+                    seat.classList.add('showdown-winner');
+                    console.log(`🏆 Highlighted ${playerName} as winner`);
+                }
+                
+                console.log(`✅ Added showdown cards for ${playerName}`);
+            } else {
+                console.log(`❌ No cards to show for ${playerName}`);
+            }
+        });
+    }
+    
+    hideAllPlayerHands() {
+        console.log('🫥 Hiding all player hands');
+        const playerSeats = this.playersContainer.querySelectorAll('.player-seat');
+        playerSeats.forEach(seat => {
+            const showdownCards = seat.querySelector('.showdown-cards');
+            if (showdownCards) {
+                showdownCards.remove();
+            }
+            seat.classList.remove('showdown-winner');
+        });
+    }
+    
+    createSmallCardElement(card) {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'card small-card';
+        
+        const isRed = card.suit === 'hearts' || card.suit === 'diamonds';
+        cardDiv.classList.add(isRed ? 'red' : 'black');
+
+        const suitSymbols = {
+            'hearts': '♥',
+            'diamonds': '♦',
+            'clubs': '♣',
+            'spades': '♠'
+        };
+
+        cardDiv.innerHTML = `
+            <div class="card-rank">${card.rank}</div>
+            <div class="card-suit">${suitSymbols[card.suit]}</div>
+        `;
+
+        return cardDiv;
     }
 
     formatCards(cards) {
@@ -747,6 +946,179 @@ class PokerClient {
         return rankNames[value] || value.toString();
     }
 
+    showPlayerAction(actionData) {
+        console.log('🎬 Player action:', actionData);
+        
+        // Show mini action indicator above player's seat (but not for human player)
+        if (actionData.playerName !== this.playerName) {
+            this.showPlayerActionIndicator(actionData);
+        }
+        
+        // Create main action display element (center table)
+        const actionDiv = document.createElement('div');
+        actionDiv.className = 'player-action-display';
+        
+        let actionText = `${actionData.playerName}: ${actionData.action}`;
+        if (actionData.amount > 0) {
+            actionText += ` $${actionData.amount}`;
+        }
+        
+        actionDiv.textContent = actionText;
+        
+        // Style based on action type
+        if (actionData.action === 'FOLD') {
+            actionDiv.classList.add('action-fold');
+        } else if (actionData.action === 'CALL' || actionData.action === 'CHECK') {
+            actionDiv.classList.add('action-call');
+        } else if (actionData.action === 'RAISE' || actionData.action === 'ALL IN') {
+            actionDiv.classList.add('action-raise');
+        }
+        
+        // Add below the pot display in the community area
+        const communityArea = document.querySelector('.community-area');
+        if (communityArea) {
+            actionDiv.style.position = 'absolute';
+            actionDiv.style.top = '200px'; // Even further below the pot display
+            actionDiv.style.left = '50%';
+            actionDiv.style.transform = 'translateX(-50%)';
+            actionDiv.style.zIndex = '1000';
+            communityArea.appendChild(actionDiv);
+            
+            // Animate in
+            actionDiv.style.opacity = '0';
+            actionDiv.style.animation = 'actionFadeIn 0.5s ease forwards';
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                if (actionDiv.parentNode) {
+                    actionDiv.style.animation = 'actionFadeOut 0.5s ease forwards';
+                    setTimeout(() => {
+                        if (actionDiv.parentNode) {
+                            actionDiv.parentNode.removeChild(actionDiv);
+                        }
+                    }, 500);
+                }
+            }, 2500);
+        }
+        
+        // Also show in message area
+        this.showMessage(actionText, 'action');
+    }
+
+    showPlayerActionIndicator(actionData) {
+        console.log('🎯 Showing action indicator for:', actionData.playerName);
+        
+        // Find the player's seat
+        const playerSeats = this.playersContainer.querySelectorAll('.player-seat');
+        let targetSeat = null;
+        
+        playerSeats.forEach(seat => {
+            const playerNameElement = seat.querySelector('.player-name');
+            if (playerNameElement && playerNameElement.textContent === actionData.playerName) {
+                targetSeat = seat;
+            }
+        });
+        
+        // For human player, create a special container so it doesn't interfere with cards
+        if (actionData.playerName === this.playerName) {
+            targetSeat = this.getOrCreateHumanPlayerIndicatorContainer();
+        }
+        
+        if (!targetSeat) {
+            console.log('❌ Could not find seat for player:', actionData.playerName);
+            return;
+        }
+        
+        // Remove any existing action indicator
+        const existingIndicator = targetSeat.querySelector('.mini-action-indicator');
+        if (existingIndicator) {
+            existingIndicator.remove();
+        }
+        
+        // Create mini action indicator
+        const indicator = document.createElement('div');
+        indicator.className = 'mini-action-indicator';
+        
+        let actionText = actionData.action;
+        if (actionData.amount > 0) {
+            actionText += ` $${actionData.amount}`;
+        }
+        
+        indicator.textContent = actionText;
+        
+        // Style based on action type
+        if (actionData.action === 'FOLD') {
+            indicator.classList.add('mini-action-fold');
+        } else if (actionData.action === 'CALL' || actionData.action === 'CHECK') {
+            indicator.classList.add('mini-action-call');
+        } else if (actionData.action === 'RAISE' || actionData.action === 'ALL IN') {
+            indicator.classList.add('mini-action-raise');
+        }
+        
+        // Position based on whether it's human player or bot
+        if (actionData.playerName === this.playerName) {
+            // For human player, position it absolutely without affecting other elements
+            indicator.style.position = 'relative';
+            indicator.style.top = '0';
+            indicator.style.left = '0';
+            indicator.style.transform = 'none';
+            indicator.style.zIndex = '500';
+            indicator.style.margin = '0 auto';
+        } else {
+            // For bots, position above their seat
+            indicator.style.position = 'absolute';
+            indicator.style.top = '-25px';
+            indicator.style.left = '50%';
+            indicator.style.transform = 'translateX(-50%)';
+            indicator.style.zIndex = '500';
+            targetSeat.style.position = 'relative'; // Ensure relative positioning
+        }
+        
+        // Add to appropriate container
+        targetSeat.appendChild(indicator);
+        
+        // Animate in
+        indicator.style.opacity = '0';
+        indicator.style.animation = 'miniActionBounce 0.6s ease forwards';
+        
+        // Remove after 4 seconds
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.style.animation = 'miniActionFadeOut 0.5s ease forwards';
+                setTimeout(() => {
+                    if (indicator.parentNode) {
+                        indicator.parentNode.removeChild(indicator);
+                    }
+                }, 500);
+            }
+        }, 4000);
+        
+        console.log('✅ Added mini action indicator for:', actionData.playerName);
+    }
+
+    getOrCreateHumanPlayerIndicatorContainer() {
+        // Check if container already exists
+        let container = document.getElementById('human-action-indicator-container');
+        
+        if (!container) {
+            // Create a container specifically for human player action indicators
+            container = document.createElement('div');
+            container.id = 'human-action-indicator-container';
+            container.style.position = 'fixed';
+            container.style.bottom = '160px'; // Above the player info area
+            container.style.left = '50%';
+            container.style.transform = 'translateX(-50%)';
+            container.style.zIndex = '500';
+            container.style.pointerEvents = 'none';
+            
+            // Add to body so it doesn't interfere with other elements
+            document.body.appendChild(container);
+            console.log('🏗️ Created human player action indicator container');
+        }
+        
+        return container;
+    }
+
     showMessage(message, type = 'info') {
         const messageDiv = document.createElement('div');
         messageDiv.className = `game-message ${type}`;
@@ -769,7 +1141,7 @@ class PokerClient {
         this.clearTimer();
         let timeLeft = timeLimit / 1000; // Convert to seconds
         
-        console.log('Starting timer:', timeLeft, 'seconds');
+        console.log('⏰ Starting 10-second countdown timer:', timeLeft, 'seconds');
         
         // Show timer overlay
         this.timerOverlay.style.display = 'block';
