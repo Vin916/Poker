@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎰 Local Poker Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🎰 Vin Poker type shit</h1>
+            <div class="game-info">
+                <span id="game-phase">Waiting for players...</span>
+                <span id="pot-amount">Pot: $0</span>
+                <button id="pause-btn" class="pause-btn" style="display: none;">⏸️ Pause</button>
+            </div>
+        </header>
+
+        <!-- Login Modal -->
+        <div id="login-modal" class="modal">
+            <div class="modal-content">
+                <h2>Join the Game</h2>
+                <input type="text" id="player-name" placeholder="Enter your name" maxlength="20">
+                <button id="join-game-btn">Join Game</button>
+            </div>
+        </div>
+
+        <!-- Auto Action Panel -->
+        <div class="auto-actions" id="auto-actions" style="display: none;">
+            <h3>Auto Actions</h3>
+            <div class="auto-action-item">
+                <input type="checkbox" id="auto-fold" class="auto-checkbox">
+                <label for="auto-fold">Auto Fold</label>
+            </div>
+            <div class="auto-action-item">
+                <input type="checkbox" id="auto-check-call" class="auto-checkbox">
+                <label for="auto-check-call">Auto Check/Call</label>
+            </div>
+            <div class="auto-action-item">
+                <input type="checkbox" id="auto-check-fold" class="auto-checkbox">
+                <label for="auto-check-fold">Check/Fold</label>
+            </div>
+            <div class="auto-action-note">
+                <small>Actions will execute automatically when it's your turn</small>
+            </div>
+        </div>
+
+        <!-- Game Table -->
+        <div id="game-table" class="poker-table" style="display: none;">
+            <!-- Timer Display - Prominent Position -->
+            <div class="timer-overlay" id="timer-overlay" style="display: none;">
+                <div class="timer-display-main">
+                    <span id="timer-text-main">Your Turn - Time remaining: <span id="timer-countdown-main">10</span>s</span>
+                </div>
+            </div>
+
+            <!-- Community Cards Area -->
+            <div class="community-area">
+                <div class="community-cards" id="community-cards">
+                    <!-- Community cards will be added here -->
+                </div>
+                <div class="pot-display">
+                    <span id="pot-display">$0</span>
+                </div>
+            </div>
+
+            <!-- Players -->
+            <div class="players-container">
+                <!-- Player seats will be dynamically generated -->
+            </div>
+
+            <!-- Player's Hand and Controls -->
+            <div class="player-area">
+                <div class="player-hand" id="player-hand">
+                    <!-- Player's hole cards -->
+                </div>
+                
+                <div class="player-info">
+                    <div class="player-stats">
+                        <span id="player-name-display">You</span>
+                        <span id="player-stack">$1000</span>
+                    </div>
+                    <div class="hand-strength">
+                        <span id="current-hand">Your Hand: --</span>
+                    </div>
+                </div>
+
+                <div class="betting-controls" id="betting-controls" style="display: none;">
+                    <div class="timer-display" id="timer-display" style="display: none;">
+                        <span id="timer-text">Time remaining: <span id="timer-countdown">10</span>s</span>
+                    </div>
+                    
+                    <div class="bet-amount-container">
+                        <input type="range" id="bet-slider" min="0" max="1000" value="20">
+                        <input type="number" id="bet-input" min="0" max="1000" value="20">
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button id="fold-btn" class="action-btn fold">Fold</button>
+                        <button id="check-call-btn" class="action-btn call">Check</button>
+                        <button id="raise-btn" class="action-btn raise">Raise</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Messages -->
+        <div class="game-messages" id="game-messages">
+            <!-- Game status messages will appear here -->
+        </div>
+
+        <!-- Game Paused Overlay -->
+        <div id="game-paused-overlay" class="game-paused-overlay" style="display: none;">
+            <div class="pause-message">
+                <h2>⏸️ Game Paused</h2>
+                <p>Click "Resume" to continue playing</p>
+                <button id="resume-btn" class="resume-btn">▶️ Resume Game</button>
+            </div>
+        </div>
+
+        <!-- Hand Results Modal -->
+        <div id="hand-result-modal" class="modal" style="display: none;">
+            <div class="modal-content result-content">
+                <h2>Hand Complete!</h2>
+                <div id="hand-results">
+                    <!-- Hand results will be displayed here -->
+                </div>
+                <button id="continue-btn">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+</body>
+</html> 
